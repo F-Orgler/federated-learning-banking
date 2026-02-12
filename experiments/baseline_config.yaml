@@ -1,0 +1,129 @@
+# Configuration for Baseline Pipeline with Fairness Improvement and Explainability-Tools
+
+data:
+  raw_path: "data/raw"
+  processed_path: "data/processed"
+  banks: ["BankA", "BankB", "BankC"]
+  test_size: 0.2
+  val_size: 0.1
+  random_state: 42
+
+# data:
+#   raw_path: "data/raw"
+#   processed_path: "data/processed"
+#   banks: ["Bank A", "Bank B", "Bank C"]
+#   test_size: 0.2
+#   random_state: 42
+
+preprocessing:
+  missing_value_indicator: "?"
+  handle_missing: "combined"  # Options: drop, mode, median, combined
+  scaling: "standard"  # Options: standard, minmax, robust
+
+# best model found with the below hyperparameter_tuning
+model:
+  type: "random_forest"
+  params:
+    n_estimators: 300
+    max_depth: 30
+    min_samples_split: 5
+    min_samples_leaf: 1
+    max_features: "sqrt"
+    random_state: 42
+    n_jobs: -1
+
+  hyperparameter_tuning:
+    enabled: false
+    method: "grid"  # Options: grid, random
+    cv_folds: 5
+    param_grid:
+      n_estimators: [100, 200, 300]
+      max_depth: [10, 20, 30]
+      min_samples_split: [2, 5, 10]
+      min_samples_leaf: [1, 2, 4]
+
+training:
+  cross_validation: true
+  cv_folds: 5
+  verbose: 2
+
+# ==============================================================================
+# FAIRNESS CONFIGURATION
+# ==============================================================================
+
+fairness:
+  enabled: true
+  
+  # Fairness improvement methods
+  improvement:
+    enabled: false
+    
+    # Methods to try (in order):
+    # - threshold_optimization: Optimize thresholds per group (RECOMMENDED - fast & effective)
+    # - reweighing: Reweight samples to balance groups
+    # - disparate_impact_remover: Remove correlation with sensitive features
+    # - lfr: Learning Fair Representations (slow, needs tuning)
+    methods:
+      - threshold_optimization
+      # - reweighing
+      # - disparate_impact_remover  # Uncomment to try
+      # - lfr                        # Uncomment to try (slow!)
+    
+    # Threshold Optimization Settings
+    min_recall: 0.6                    # Minimum required recall (critical for banking!)
+    disparate_impact_target: 0.8       # Target Disparate Impact (0.8 = fair)
+    
+    # Preprocessing Settings
+    repair_level: 1.0                  # For disparate_impact_remover (0-1)
+    retrain_with_fair_data: true       # Retrain model with mitigated data
+    use_sample_weights: true           # Use sample weights from reweighing
+    
+    # LFR Settings (if using LFR)
+    lfr_k: 5                           # Latent dimension
+    lfr_Ax: 0.01                       # Fairness weight
+    lfr_Ay: 1.0                        # Accuracy weight
+    lfr_Az: 50.0                       # Reconstruction weight
+  
+  # Protected attributes
+  protected_attributes:
+    - "gender"
+    - "race"
+  
+  reference_groups:
+    gender: "Male"
+    race: "White"
+  
+  # Fairness metrics to compute
+  metrics:
+    - "disparate_impact"
+    - "statistical_parity_difference"
+    - "equal_opportunity_difference"
+    - "equalized_odds_difference"
+
+explainability:
+  enabled: false
+  shap:
+    enabled: true
+    max_samples: 1000
+
+output:
+  models_dir: "results/models"
+  plots_dir: "results/plots"
+  reports_dir: "results/reports"
+  save_model: true
+  model_name: "baseline_random_forest.joblib"
+
+# ==============================================================================
+# RECOMMENDED PIPELINE SEQUENCE
+# ==============================================================================
+#
+# 1. Run with threshold_optimization FIRST (fastest, most effective for recall + fairness)
+#    → This will show how much improvement is possible WITHOUT retraining
+#
+# 2. If threshold optimization is not enough reweighing is recommended as next step
+#    → This retrains the model with balanced sample weights
+#
+# 3. If still not fair enough, try disparate_impact_remover
+#    → This removes correlation with sensitive features (more aggressive)
+#
+# 4. LFR is the most complex and slowest - only use if others fail

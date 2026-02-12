@@ -1,0 +1,84 @@
+# Federated Learning Configuration (Updated)
+
+data:
+  raw_path: "data/raw"
+  processed_path: "data/processed"
+  banks: ["BankA", "BankB", "BankC"]
+  test_size: 0.2
+  random_state: 42
+
+# Federated Ensemble Configuration
+federated:
+  # Federated Random Forest Ensemble with weighted voting
+  
+  aggregation_methods:
+    - weighted     # By data size (standard in FL)
+    - uniform      # Equal weights for all banks
+    - performance  # By local model accuracy
+
+model:
+  type: "random_forest"
+  params:
+    # Use baseline-tuned hyperparameters for fair comparison
+    n_estimators: 200
+    max_depth: 20
+    min_samples_split: 5
+    min_samples_leaf: 2
+    max_features: "sqrt"
+    random_state: 42
+    n_jobs: -1
+
+evaluation:
+  metrics:
+    - "accuracy"
+    - "precision"
+    - "recall"
+    - "f1"
+    - "roc_auc"
+  
+  # Evaluate on each bank's test set
+  per_bank_evaluation: true
+  
+  # Compare with centralized baseline
+  compare_with_baseline: true
+  
+  # Compare with local-only models
+  compare_with_local: true
+
+fairness:
+  enabled: true
+  protected_attributes:
+    - "gender"
+    - "race"
+  
+  reference_groups:
+    gender: "Male"
+    race: "White"
+  
+  metrics:
+    - "demographic_parity_difference"
+    - "equalized_odds_difference"
+    - "equal_opportunity_difference"
+    - "disparate_impact"
+  
+  # ⭐ Threshold Optimization Settings
+  threshold_optimization:
+    enabled: false  # Set to false to skip threshold optimization
+    use_precomputed: true  # Use precomputed thresholds (FAST) vs optimize fresh (SLOW)
+    min_recall: 0.6
+    disparate_impact_target: 0.8
+    
+    # ⭐ Precomputed thresholds from run_pipeline_improved.py
+    # Copy these values from your baseline threshold optimization output:
+    # "✓ Optimal thresholds found: Privileged group: X.XXX, Unprivileged group: Y.YYY"
+    precomputed_thresholds:
+      gender:
+        privileged: 0.370   # Male (from your baseline)
+        unprivileged: 0.100  # Female (from your baseline)
+
+output:
+  models_dir: "results/models/federated"
+  plots_dir: "results/plots/federated"
+  reports_dir: "results/reports/federated"
+  save_ensembles: true
+  save_local_models: false  # Local models just for comparison
